@@ -92,6 +92,11 @@ class UserPlaylistResource:
         :return: True if the user can and is removed, False otherwise
         """
 
+        if not UserPlaylistResource.doesUserPlaylistExist(userIdToRemove, playlistId):
+            return False
+        if not UserPlaylistResource.doesUserPlaylistExist(elevatedUserId, playlistId):
+            return False
+
         sql = """
         DELETE u.*
         FROM PlaylistAccess.UserPlaylist u
@@ -137,6 +142,10 @@ class UserPlaylistResource:
         playlist_required_args = ['playlistName']
         required_args = set()
         user_exists = playlist_exists = True
+
+        # If we already have a userId/playlistId combo there's nothing to do
+        if UserPlaylistResource.doesUserPlaylistExist(userId, playlistId):
+            return False
 
         if not UserResource.doesUserExist(userId):
             user_exists = False
@@ -204,5 +213,23 @@ class UserPlaylistResource:
             print(df)
             cursor.close()
             return True
+        except:
+            return False
+
+    @staticmethod
+    def doesUserPlaylistExist(userId, playlistId):
+        sql = """
+        select count(*)
+        from PlaylistAccess.UserPlaylist
+        where userId=%s and playlistId=%s
+        """
+
+        conn = UserPlaylistResource._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute(sql)
+            count = get_count_from_cursor_execution(cursor)
+            return count != 0
         except:
             return False
