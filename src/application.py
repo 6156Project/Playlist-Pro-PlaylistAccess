@@ -78,7 +78,7 @@ def dbgUser():
     request_inputs = rest_utils.RESTContext(request)
 
     res = UserResource.info()
-    rsp = Response(json.dumps(res), status=200, content_type="application/json")
+    rsp = Response(res, status=201, content_type="text/plain")
     return rsp
 
 @app.route("/api/playlistaccess/info", methods=["GET"])
@@ -86,7 +86,7 @@ def dbgUserPlaylist():
     request_inputs = rest_utils.RESTContext(request)
 
     res = UserPlaylistResource.info()
-    rsp = Response(json.dumps(res), status=200, content_type="application/json")
+    rsp = Response(res, status=201, content_type="text/plain")
     return rsp
 
 @app.route("/api/playlist/info", methods=["GET"])
@@ -94,7 +94,7 @@ def dbgPlaylist():
     request_inputs = rest_utils.RESTContext(request)
 
     res = PlaylistResource.info()
-    rsp = Response(json.dumps(res), status=200, content_type="application/json")
+    rsp = Response(res, status=201, content_type="text/plain")
     return rsp
 
 if __name__ == '__main__':
@@ -120,5 +120,4 @@ if __name__ == '__main__':
     #     req += ";"
     #     print(req)
     #     cursor.execute(req)
-    # Force change
     app.run(host="0.0.0.0", port=5011)

@@ -56,11 +56,11 @@ class UserResource:
             cursor.execute(sql)
             r =cursor.fetchall()
             df = pd.DataFrame(r)
-            print(df)
+            ret = df.to_string()
             cursor.close()
-            return True
+            return ret
         except:
-            return False
+            return ''
 
     @staticmethod
     def doesUserExist(userId):

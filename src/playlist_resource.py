@@ -28,12 +28,14 @@ class PlaylistResource:
         values (%s, %s);
         """
 
+        print('creating playlist')
         conn = PlaylistResource._get_connection()
         cursor = conn.cursor()
 
         try:
             cursor.execute(sql, (playlistId, name))
             conn.commit()
+            print('commited')
             return True
         #@TODO - remove debug print
         except Exception as e:
@@ -74,8 +76,8 @@ class PlaylistResource:
             cursor.execute(sql)
             r = cursor.fetchall()
             df = pd.DataFrame(r)
-            print(df)
+            ret = df.to_string()
             cursor.close()
-            return True
+            return ret
         except:
-            return False
+            return ''

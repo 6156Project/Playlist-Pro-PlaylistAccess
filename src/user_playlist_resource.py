@@ -115,9 +115,11 @@ class UserPlaylistResource:
         cursor = conn.cursor()
 
         try:
+            before = UserPlaylistResource.__get_count_from_db('PlaylistAccess.UserPlaylist')
             cursor.execute(sql, (userIdToRemove, playlistId, elevatedUserId, playlistId))
             conn.commit()
-            return True
+            after = UserPlaylistResource.__get_count_from_db('PlaylistAccess.UserPlaylist')
+            return after < before
         except:
             return False
 
@@ -167,9 +169,11 @@ class UserPlaylistResource:
         try:
             if not playlist_exists:
                 if not PlaylistResource.createPlaylist(playlistId, *list(map(kwargs.get, playlist_required_args))):
-                    UserResource._remove_user(userId)
+                    if not user_exists:
+                        UserResource._remove_user(userId)
                     return False
-        except:
+        except Exception as e:
+            print(e)
             return False  # May happen if there aren't proper args
 
 
@@ -188,9 +192,16 @@ class UserPlaylistResource:
         cursor = conn.cursor()
 
         try:
+            before = UserPlaylistResource.__get_count_from_db('PlaylistAccess.UserPlaylist')
             cursor.execute(sql, (userId, playlistId, playlistId))
+            after = UserPlaylistResource.__get_count_from_db('PlaylistAccess.UserPlaylist')
             conn.commit()
-            return True
+            ret = after > before
+            # Cleanup if necessary
+            if not ret:
+                if not user_exists:
+                    UserResource._remove_user(userId)
+            return ret
         except Exception as e:
             print(e)
             return False
@@ -210,11 +221,11 @@ class UserPlaylistResource:
             cursor.execute(sql)
             r = cursor.fetchall()
             df = pd.DataFrame(r)
-            print(df)
+            ret = df.to_string()
             cursor.close()
-            return True
+            return ret
         except:
-            return False
+            return ''
 
     @staticmethod
     def doesUserPlaylistExist(userId, playlistId):
@@ -233,3 +244,22 @@ class UserPlaylistResource:
             return count != 0
         except:
             return False
+
+    
+    @staticmethod
+    def __get_count_from_db(db: str):
+        sql = f"""
+        select count(*)
+        from {db}
+        """
+    
+        conn = UserPlaylistResource._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute(sql)
+            ret = get_count_from_cursor_execution(cursor)
+        except:
+            ret = None
+        
+        return ret
