@@ -2,51 +2,35 @@ import pymysql
 import os
 
 from utils import get_count_from_cursor_execution
-from user_resource import UserResource
-from playlist_resource import PlaylistResource
 
 class UserPlaylistResource:
     def __init__(self):
         pass
 
     @staticmethod
-    def _get_connection():
+    def _get_connection(db=None):
         usr = os.environ.get("DBUSER")
         pw = os.environ.get("DBPW")
         h = os.environ.get("DBHOST")
 
-        conn = pymysql.connect(
-            user=usr,
-            password=pw,
-            host=h,
-            cursorclass=pymysql.cursors.DictCursor,
-            autocommit=True
-        )
+        if db:
+            conn = pymysql.connect(
+                user=usr,
+                password=pw,
+                host=h,
+                cursorclass=pymysql.cursors.DictCursor,
+                autocommit=True,
+                database=db
+            )
+        else:
+            conn = pymysql.connect(
+                user=usr,
+                password=pw,
+                host=h,
+                cursorclass=pymysql.cursors.DictCursor,
+                autocommit=True
+            )
         return conn
-
-    @staticmethod
-    def hasAccessToPlaylist(userId, playlistId):
-        """
-        :param userId: User ID for a specific user
-        :param playlistId: Playlist ID
-        :return: True if user has access, False otherwise
-        """
-
-        sql = """
-        select count(*)
-        from PlaylistAccess.UserPlaylist
-        where userId=%s and playlistId=%s;
-        """
-
-        conn = UserPlaylistResource._get_connection()
-        cursor = conn.cursor()
-
-        try:
-            cursor.execute(sql, (userId, playlistId))
-            num_rows = get_count_from_cursor_execution(cursor)
-            return num_rows != 0
-        except:
-            return False
 
     @staticmethod
     def addUserToPlaylist(elevatedUserId, newUserId, playlistId):
@@ -61,8 +45,8 @@ class UserPlaylistResource:
         """
 
         sql = """
-        insert into PlaylistAccess.UserPlaylist (userId, playlistId)
-        select %s, %s
+        insert into PlaylistAccess.UserPlaylist (userId, playlistId, ownerId)
+        select %s, %s, %s
         from PlaylistAccess.UserPlaylist
         where (
 	        select count(*)
@@ -71,11 +55,13 @@ class UserPlaylistResource:
         ) = 1;
         """
 
+        ownerId = UserPlaylistResource.__getOwner(playlistId)
+
         conn = UserPlaylistResource._get_connection()
         cursor = conn.cursor()
 
         try:
-            cursor.execute(sql, (newUserId, playlistId, elevatedUserId, playlistId))
+            cursor.execute(sql, (newUserId, playlistId, ownerId, elevatedUserId, playlistId))
             conn.commit()
             return True
         except:
@@ -92,100 +78,52 @@ class UserPlaylistResource:
         :return: True if the user can and is removed, False otherwise
         """
 
+        if UserPlaylistResource.__isPlaylistOwner(userIdToRemove, playlistId):
+            return False  # Don't remove the owner
         if not UserPlaylistResource.doesUserPlaylistExist(userIdToRemove, playlistId):
-            return False
+            return False  # User doesn't have access
         if not UserPlaylistResource.doesUserPlaylistExist(elevatedUserId, playlistId):
-            return False
+            return False  # Elevated User doesn't have access
 
         sql = """
         DELETE u.*
-        FROM PlaylistAccess.UserPlaylist u
-        where u.userId=%s and u.playlistId=%s and
-        (
-            select count(*)
-            from (
-              select * from
-              PlaylistAccess.UserPlaylist as UP
-              where UP.userId=%s and UP.playlistId=%s
-            ) as x
-        ) = 1;
+        FROM UserPlaylist u
+        where userId=%s and playlistId=%s
         """
-
-        conn = UserPlaylistResource._get_connection()
-        cursor = conn.cursor()
 
         try:
             before = UserPlaylistResource.__get_count_from_db('PlaylistAccess.UserPlaylist')
-            cursor.execute(sql, (userIdToRemove, playlistId, elevatedUserId, playlistId))
-            conn.commit()
+            conn = UserPlaylistResource._get_connection('PlaylistAccess')
+            cursor = conn.cursor()
+            cursor.execute(sql, (userIdToRemove, playlistId))
             after = UserPlaylistResource.__get_count_from_db('PlaylistAccess.UserPlaylist')
+            conn.commit()
             return after < before
-        except:
+        except Exception as e:
+            print(e)
             return False
 
     @staticmethod
-    def createPlaylistForUser(userId, playlistId, kwargs):
+    def createPlaylistForUser(userId, playlistId):
         """
-        Creates a playlist for a user. This is creating the shared "UserPlaylist" table.
-
-        If the userId doesn't exist yet you can provide arguments:
-            firstName, lastName, email
-
-        If the playlistId doesn't exist yet you can provide arguments:
-            playlistName
+        Creates a playlist for a user.
 
         :param userId: user ID to create for
         :param playlistId: playlist ID
-        :param kwargs: dictionary of arguments
         :return: True if successful, False otherwise
         """
-
-        user_required_args = ['firstName', 'lastName', 'email']
-        playlist_required_args = ['playlistName']
-        required_args = set()
-        user_exists = playlist_exists = True
 
         # If we already have a userId/playlistId combo there's nothing to do
         if UserPlaylistResource.doesUserPlaylistExist(userId, playlistId):
             return False
 
-        if not UserResource.doesUserExist(userId):
-            user_exists = False
-            required_args |= set(user_required_args)
-        if not PlaylistResource.doesPlaylistExist(playlistId):
-            playlist_exists = False
-            required_args |= set(playlist_required_args)
-
-        # Make sure the required arguments were passed
-        if not all(key in set(kwargs.keys()) for key in required_args):
+        # If the playlist exists then we can't create one
+        if UserPlaylistResource.doesPlaylistExist(playlistId):
             return False
-
-        try:
-            if not user_exists:
-                if not UserResource.createUser(userId, *list(map(kwargs.get, user_required_args))):
-                    return False
-        except:
-            return False  # May happen if there aren't proper args
-        try:
-            if not playlist_exists:
-                if not PlaylistResource.createPlaylist(playlistId, *list(map(kwargs.get, playlist_required_args))):
-                    if not user_exists:
-                        UserResource._remove_user(userId)
-                    return False
-        except Exception as e:
-            print(e)
-            return False  # May happen if there aren't proper args
-
 
         sql = """
         insert into PlaylistAccess.UserPlaylist
-        select %s, %s
-        from PlaylistAccess.UserPlaylist
-        where (
-	        select count(*)
-  	        from PlaylistAccess.UserPlaylist as UP
-  	        where UP.playlistId=%s
-        ) = 0;
+        values (%s, %s, %s)
         """
 
         conn = UserPlaylistResource._get_connection()
@@ -193,21 +131,17 @@ class UserPlaylistResource:
 
         try:
             before = UserPlaylistResource.__get_count_from_db('PlaylistAccess.UserPlaylist')
-            cursor.execute(sql, (userId, playlistId, playlistId))
+            cursor.execute(sql, (userId, playlistId, userId))
             after = UserPlaylistResource.__get_count_from_db('PlaylistAccess.UserPlaylist')
             conn.commit()
             ret = after > before
-            # Cleanup if necessary
-            if not ret:
-                if not user_exists:
-                    UserResource._remove_user(userId)
             return ret
         except Exception as e:
             print(e)
             return False
 
     @staticmethod
-    def info():
+    def info(userId=None):
         import pandas as pd
         conn = UserPlaylistResource._get_connection()
         cursor = conn.cursor()
@@ -217,12 +151,20 @@ class UserPlaylistResource:
             from PlaylistAccess.UserPlaylist
             """
 
+        if userId:
+            sql += """
+            where userId=%s
+            """
+
         try:
-            cursor.execute(sql)
+            if userId:
+                cursor.execute(sql, (userId,))
+            else:
+                cursor.execute(sql)
             r = cursor.fetchall()
             df = pd.DataFrame(r)
-            ret = df.to_string()
-            cursor.close()
+            ret = df.to_json()
+            # cursor.close()
             return ret
         except:
             return ''
@@ -239,7 +181,7 @@ class UserPlaylistResource:
         cursor = conn.cursor()
 
         try:
-            cursor.execute(sql)
+            cursor.execute(sql, (userId, playlistId))
             count = get_count_from_cursor_execution(cursor)
             return count != 0
         except:
@@ -248,6 +190,12 @@ class UserPlaylistResource:
     
     @staticmethod
     def __get_count_from_db(db: str):
+        """
+        Get the number of items in a database table
+
+        :param db: Database.Table name
+        :return: number of items in the table
+        """
         sql = f"""
         select count(*)
         from {db}
@@ -263,3 +211,67 @@ class UserPlaylistResource:
             ret = None
         
         return ret
+
+    @staticmethod
+    def __isPlaylistOwner(userId, playlistId):
+        """
+        Determine if a user is the owner of a playlist
+
+        :param userId: User ID to check
+        :param playlistId:  Playlist ID to check
+        :return: True if they are, False otherwise
+        """
+        sql = f"""
+        select count(*)
+        from PlaylistAccess.UserPlaylist
+        where ownerId=%s and playlistId=%s
+        """
+
+        conn = UserPlaylistResource._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute(sql, (userId, playlistId))
+            ret = get_count_from_cursor_execution(cursor)
+            return ret != 0
+        except Exception as e:
+            print(e)
+            return False
+
+    @staticmethod
+    def __getOwner(playlistId):
+        sql = """
+        select ownerId
+        from PlaylistAccess.UserPlaylist
+        where playlistId=%s
+        """
+
+        conn = UserPlaylistResource._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute(sql, (playlistId, ))
+            ret = cursor.fetchone()['ownerId']
+            return ret
+        except Exception as e:
+            print(e)
+            return None
+
+    @staticmethod
+    def doesPlaylistExist(playlistId):
+        sql = """
+        select count(*)
+        from PlaylistAccess.UserPlaylist
+        where playlistId=%s
+        """
+
+        conn = UserPlaylistResource._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute(sql, (playlistId, ))
+            count = get_count_from_cursor_execution(cursor)
+            return count != 0
+        except Exception as e:
+            print(e)
+            return False

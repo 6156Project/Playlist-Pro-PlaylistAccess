@@ -3,11 +3,9 @@ from datetime import datetime
 import json
 import rest_utils
 from user_playlist_resource import UserPlaylistResource
-from user_resource import UserResource
-from playlist_resource import PlaylistResource
-from flask_cors import CORS
+from flask_cors import CORS, cross_origin
 
-__VERSION__ = '1.1' # For testing
+__VERSION__ = '1.2'  # For testing
 
 # Create the Flask application object.
 app = Flask(__name__,
@@ -17,8 +15,11 @@ app = Flask(__name__,
 
 CORS(app)
 
-@app.get("/api/health")
+@app.route("/api/health", methods=["GET", "OPTIONS"])
+@cross_origin()
 def get_health():
+    if request.method == 'OPTIONS':
+        return handle_options()
     t = str(datetime.now())
     msg = {
         "name": "PlaylistAccess Microservice",
@@ -32,69 +33,80 @@ def get_health():
 
     return result
 
-@app.route("/api/playlistaccess/<playlistId>/access/<userId>", methods=["GET"])
+@app.route("/api/playlistaccess/<playlistId>/access/<userId>", methods=["GET", "OPTIONS"])
+@cross_origin()
 def hasAccessToPlaylist(userId, playlistId):
+    if request.method == 'OPTIONS':
+        return handle_options()
     request_inputs = rest_utils.RESTContext(request)
 
-    res = UserPlaylistResource.hasAccessToPlaylist(userId, playlistId)
+    res = UserPlaylistResource.doesUserPlaylistExist(userId, playlistId)
     rsp = Response(json.dumps(res), status=200, content_type="application/json")
 
     return rsp
 
-@app.route("/api/playlistaccess/<playlistId>/user/<userId>/add/<newUserId>", methods=["POST"])
+@app.route("/api/playlistaccess/<playlistId>/user/<userId>/add/<newUserId>", methods=["POST", "OPTIONS"])
+@cross_origin()
 def addUserToPlaylist(playlistId, userId, newUserId):
+    if request.method == 'OPTIONS':
+        return handle_options()
     request_inputs = rest_utils.RESTContext(request)
 
     res = UserPlaylistResource.addUserToPlaylist(userId, newUserId, playlistId)
-    rsp = Response(json.dumps(f"{userId} adding {newUserId} to {playlistId}: {'success' if res else 'failure'}"),
-                   status=201, content_type="text/plain")
+    rsp = Response(json.dumps(res), status=200, content_type="application/json")
 
     return rsp
 
 
-@app.route("/api/playlistaccess/<playlistId>/user/<userId>/remove/<userIdToRemove>", methods=["DELETE"])
+@app.route("/api/playlistaccess/<playlistId>/user/<userId>/remove/<userIdToRemove>", methods=["DELETE", "OPTIONS"])
+@cross_origin()
 def removeUserFromPlaylist(playlistId, userId, userIdToRemove):
-    request_inputs = rest_utils.RESTContext(request)
+    if request.method == 'OPTIONS':
+        return handle_options()
 
     res = UserPlaylistResource.removeUserFromPlaylist(userId, userIdToRemove, playlistId)
-    rsp = Response(json.dumps(f"{userId} removing {userIdToRemove} to {playlistId}: {'success' if res else 'failure'}"),
-                   status=201, content_type="text/plain")
+    rsp = Response(json.dumps(res), status=200, content_type="application/json")
 
     return rsp
 
-@app.route("/api/playlistaccess/<playlistId>/create/<userId>", methods=["POST"])
+@app.route("/api/playlistaccess/<playlistId>/create/<userId>", methods=["POST", "OPTIONS"])
+@cross_origin()
 def createPlaylistForUser(playlistId, userId):
+    if request.method == 'OPTIONS':
+        return handle_options()
     request_inputs = rest_utils.RESTContext(request)
 
-    print(request_inputs.args)
-
-    res = UserPlaylistResource.createPlaylistForUser(userId, playlistId, request_inputs.args)
-    rsp = Response(json.dumps(f"{'success' if res else 'failure'}"),
-                   status=201, content_type="text/plain")
+    res = UserPlaylistResource.createPlaylistForUser(userId, playlistId)
+    rsp = Response(json.dumps(res), status=200, content_type="application/json")
     return rsp
 
-@app.route("/api/user/info", methods=["GET"])
-def dbgUser():
-    request_inputs = rest_utils.RESTContext(request)
 
-    res = UserResource.info()
-    rsp = Response(res, status=201, content_type="text/plain")
-    return rsp
-
-@app.route("/api/playlistaccess/info", methods=["GET"])
+@app.route("/api/playlistaccess/info", methods=["GET", "OPTIONS"])
+@cross_origin()
 def dbgUserPlaylist():
+    if request.method == 'OPTIONS':
+        return handle_options()
     request_inputs = rest_utils.RESTContext(request)
 
     res = UserPlaylistResource.info()
-    rsp = Response(res, status=201, content_type="text/plain")
+    rsp = Response(json.dumps(res), status=200, content_type="application/json")
     return rsp
 
-@app.route("/api/playlist/info", methods=["GET"])
-def dbgPlaylist():
+
+@app.route("/api/playlistaccess/info/<userId>", methods=["GET", "OPTIONS"])
+@cross_origin()
+def dbgUserPlaylistForUser(userId):
+    if request.method == 'OPTIONS':
+        return handle_options()
     request_inputs = rest_utils.RESTContext(request)
 
-    res = PlaylistResource.info()
-    rsp = Response(res, status=201, content_type="text/plain")
+    res = UserPlaylistResource.info(userId)
+    rsp = Response(json.dumps(res), status=200, content_type="application/json")
+    return rsp
+
+
+def handle_options():
+    rsp = Response("Options", status=200, content_type="application/json")
     return rsp
 
 if __name__ == '__main__':
@@ -120,4 +132,6 @@ if __name__ == '__main__':
     #     req += ";"
     #     print(req)
     #     cursor.execute(req)
+    # conn.commit()
+
     app.run(host="0.0.0.0", port=5011)
