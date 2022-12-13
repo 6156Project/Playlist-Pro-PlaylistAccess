@@ -33,12 +33,11 @@ class UserPlaylistResource:
         return conn
 
     @staticmethod
-    def addUserToPlaylist(elevatedUserId, newUserId, playlistId):
+    def addUserToPlaylist(newUserId, playlistId):
         """
         elevateduserId grants permission for newUserId to add songs
         to playlist
 
-        :param elevatedUserId: user ID of elevated user
         :param newUserId: new user ID being added
         :param playlistId: playlist ID
         :return: True if user is added, False otherwise
@@ -46,44 +45,39 @@ class UserPlaylistResource:
 
         sql = """
         insert into PlaylistAccess.UserPlaylist (userId, playlistId, ownerId)
-        select %s, %s, %s
-        from PlaylistAccess.UserPlaylist
-        where (
-	        select count(*)
-  	        from PlaylistAccess.UserPlaylist as UP
-  	        where UP.userId=%s and UP.playlistId=%s
-        ) = 1;
+        values (%s, %s, %s);
         """
 
-        ownerId = UserPlaylistResource.__getOwner(playlistId)
+        # ownerId = UserPlaylistResource.__getOwner(playlistId)
 
         conn = UserPlaylistResource._get_connection()
         cursor = conn.cursor()
 
         try:
-            cursor.execute(sql, (newUserId, playlistId, ownerId, elevatedUserId, playlistId))
+            # cursor.execute(sql, (newUserId, playlistId, ownerId, elevatedUserId, playlistId))
+            cursor.execute(sql, (newUserId, playlistId, 'COFFEE'))
             conn.commit()
             return True
-        except:
+        except Exception as e:
+            print(e)
             return False
 
     @staticmethod
-    def removeUserFromPlaylist(elevatedUserId, userIdToRemove, playlistId):
+    def removeUserFromPlaylist(userIdToRemove, playlistId):
         """
         Attempts to remove a user from a playlist
 
-        :param elevatedUserId: user ID for elevated user
         :param userIdToRemove: user ID that will be removed
         :param playlistId: playlist ID
         :return: True if the user can and is removed, False otherwise
         """
 
-        if UserPlaylistResource.__isPlaylistOwner(userIdToRemove, playlistId):
-            return False  # Don't remove the owner
+        # if UserPlaylistResource.__isPlaylistOwner(userIdToRemove, playlistId):
+        #     return False  # Don't remove the owner
         if not UserPlaylistResource.doesUserPlaylistExist(userIdToRemove, playlistId):
             return False  # User doesn't have access
-        if not UserPlaylistResource.doesUserPlaylistExist(elevatedUserId, playlistId):
-            return False  # Elevated User doesn't have access
+        # if not UserPlaylistResource.doesUserPlaylistExist(elevatedUserId, playlistId):
+        #     return False  # Elevated User doesn't have access
 
         sql = """
         DELETE u.*
@@ -131,7 +125,8 @@ class UserPlaylistResource:
 
         try:
             before = UserPlaylistResource.__get_count_from_db('PlaylistAccess.UserPlaylist')
-            cursor.execute(sql, (userId, playlistId, userId))
+            # cursor.execute(sql, (userId, playlistId, userId))
+            cursor.execute(sql, (userId, playlistId, 'COFFEE'))
             after = UserPlaylistResource.__get_count_from_db('PlaylistAccess.UserPlaylist')
             conn.commit()
             ret = after > before
