@@ -5,7 +5,7 @@ import rest_utils
 from user_playlist_resource import UserPlaylistResource
 from flask_cors import CORS, cross_origin
 
-__VERSION__ = '1.3'  # For testing
+__VERSION__ = '1.3'   # For testing
 
 # Create the Flask application object.
 app = Flask(__name__,
