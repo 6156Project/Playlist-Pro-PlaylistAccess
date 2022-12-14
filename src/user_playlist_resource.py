@@ -3,6 +3,7 @@ import os
 
 from utils import get_count_from_cursor_execution
 
+
 class UserPlaylistResource:
     def __init__(self):
         pass
@@ -61,6 +62,9 @@ class UserPlaylistResource:
         except Exception as e:
             print(e)
             return False
+        finally:
+            cursor.close()
+            conn.close()
 
     @staticmethod
     def removeUserFromPlaylist(userIdToRemove, playlistId):
@@ -96,6 +100,9 @@ class UserPlaylistResource:
         except Exception as e:
             print(e)
             return False
+        finally:
+            cursor.close()
+            conn.close()
 
     @staticmethod
     def createPlaylistForUser(userId, playlistId):
@@ -134,6 +141,9 @@ class UserPlaylistResource:
         except Exception as e:
             print(e)
             return False
+        finally:
+            cursor.close()
+            conn.close()
 
     @staticmethod
     def info(userId=None):
@@ -158,11 +168,14 @@ class UserPlaylistResource:
                 cursor.execute(sql)
             r = cursor.fetchall()
             df = pd.DataFrame(r)
-            ret = df.to_json()
+            ret = df.T.to_json()
             # cursor.close()
             return ret
         except:
-            return ''
+            return '{}'
+        finally:
+            cursor.close()
+            conn.close()
 
     @staticmethod
     def doesUserPlaylistExist(userId, playlistId):
@@ -181,6 +194,9 @@ class UserPlaylistResource:
             return count != 0
         except:
             return False
+        finally:
+            cursor.close()
+            conn.close()
 
     
     @staticmethod
@@ -204,6 +220,9 @@ class UserPlaylistResource:
             ret = get_count_from_cursor_execution(cursor)
         except:
             ret = None
+        finally:
+            cursor.close()
+            conn.close()
         
         return ret
 
@@ -232,6 +251,9 @@ class UserPlaylistResource:
         except Exception as e:
             print(e)
             return False
+        finally:
+            cursor.close()
+            conn.close()
 
     @staticmethod
     def __getOwner(playlistId):
@@ -251,6 +273,9 @@ class UserPlaylistResource:
         except Exception as e:
             print(e)
             return None
+        finally:
+            cursor.close()
+            conn.close()
 
     @staticmethod
     def doesPlaylistExist(playlistId):
@@ -270,3 +295,6 @@ class UserPlaylistResource:
         except Exception as e:
             print(e)
             return False
+        finally:
+            cursor.close()
+            conn.close()
